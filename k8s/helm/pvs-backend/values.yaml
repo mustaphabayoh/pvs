@@ -1,0 +1,18 @@
+replicaCount: 2
+image:
+  repository: your-registry/pvs-node-backend
+  tag: latest
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 4000
+env:
+  DATABASE_HOST: mysql
+  DATABASE_USER: veruser
+  DATABASE_PASSWORD: verpass
+  DATABASE_NAME: verification
+  JWT_SECRET: "replace-with-secure-secret"
+resources: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

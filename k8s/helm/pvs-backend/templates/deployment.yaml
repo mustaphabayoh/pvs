@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pvs-backend.fullname" . }}
+  labels:
+    app: {{ include "pvs-backend.name" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "pvs-backend.name" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "pvs-backend.name" . }}
+    spec:
+      containers:
+        - name: pvs-node-backend
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 4000
+          env:
+            - name: DATABASE_HOST
+              value: "{{ .Values.env.DATABASE_HOST }}"
+            - name: DATABASE_USER
+              value: "{{ .Values.env.DATABASE_USER }}"
+            - name: DATABASE_PASSWORD
+              value: "{{ .Values.env.DATABASE_PASSWORD }}"
+            - name: DATABASE_NAME
+              value: "{{ .Values.env.DATABASE_NAME }}"
+            - name: JWT_SECRET
+              value: "{{ .Values.env.JWT_SECRET }}"
+          resources: {{ toYaml .Values.resources | nindent 10 }}

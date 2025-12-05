@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  node-backend:
+    build:
+      context: ./node-backend
+      dockerfile: Dockerfile
+    environment:
+      - NODE_ENV=test
+    command: ["sh", "-c", "npx cross-env NODE_ENV=test npm test"]
+
+  frontend-build:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    command: ["sh", "-c", "npm run build"]

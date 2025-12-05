@@ -1,0 +1,193 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    name: Run backend tests
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: Emrys*1986#
+          MYSQL_DATABASE: verification
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd='mysqladmin ping --silent' --health-interval=5s --health-timeout=2s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Cache node modules (backend)
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-backend-${{ hashFiles('node-backend/package-lock.json') }}
+      - name: Install (backend)
+        working-directory: node-backend
+        run: npm install
+      - name: Run migrations (test)
+        working-directory: node-backend
+        run: |
+          npx sequelize-cli db:migrate --env test
+      - name: Run tests and coverage (backend)
+        working-directory: node-backend
+        env:
+          NODE_ENV: test
+        run: |
+          npm run test:coverage
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: node-backend/coverage
+          retention-days: 30
+
+  frontend-build:
+    runs-on: ubuntu-latest
+    name: Build frontend
+    needs: backend-tests
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Cache node modules (frontend)
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-frontend-${{ hashFiles('frontend/package-lock.json') }}
+      - name: Install & Build frontend
+        working-directory: frontend
+        run: |
+          npm install
+          npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    name: Run end-to-end (Cypress) tests
+    needs: [ backend-tests, frontend-build ]
+    if: always() # keep optional; will run only if Cypress files exist
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - name: Install dependencies for all (cached)
+        run: |
+          cd node-backend && npm install
+          cd ../frontend && npm install
+      - name: Start backend (test-mode)
+        env:
+          NODE_ENV: test
+        run: |
+          cd node-backend
+          node src/index.js &
+          sleep 2
+      - name: Build and preview frontend
+        run: |
+          cd frontend
+          npm run build
+          npx vite preview --port 5173 &
+          sleep 2
+      - name: Cypress run (if present)
+        working-directory: frontend
+        run: |
+          if [ -d cypress ]; then npx cypress run; else echo 'No Cypress tests found'; fi
+      - name: Upload Cypress videos/artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-artifacts
+          path: frontend/cypress/videos
+          retention-days: 30
+
+  integration:
+    runs-on: ubuntu-latest
+    name: Integration / matrix (MySQL)
+    strategy:
+      matrix:
+        node-version: [18, 20]
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: Emrys*1986#
+          MYSQL_DATABASE: verification
+          MYSQL_USER: root
+          MYSQL_PASSWORD: Emrys*1986#
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd='mysqladmin ping --silent' --health-interval=5s --health-timeout=2s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - name: Wait for MySQL
+        run: |
+          for i in `seq 1 20`; do nc -z localhost 3306 && echo 'mysql ready' && exit 0 || sleep 1; done; echo 'timeout waiting for mysql' && exit 1
+      - name: Install dependencies node-backend
+        working-directory: node-backend
+        run: npm install
+      - name: Run backend tests (Testcontainers enabled)
+        working-directory: node-backend
+        env:
+          RUN_TESTCONTAINERS: '1'
+          NODE_ENV: test
+        run: |
+          npm test --silent
+      - name: Run migrations (mysql)
+        working-directory: node-backend
+        env:
+          DATABASE_HOST: 127.0.0.1
+          DATABASE_USER: root
+          DATABASE_PASSWORD: Emrys*1986#
+          DATABASE_NAME: verification
+        run: |
+          npx sequelize-cli db:migrate --url "mysql://veruser:verpass@127.0.0.1:3306/verification"
+      - name: Start backend (mysql)
+        working-directory: node-backend
+        env:
+          DATABASE_HOST: 127.0.0.1
+          DATABASE_USER: root
+          DATABASE_PASSWORD: Emrys*1986#
+          DATABASE_NAME: verification
+          NODE_ENV: test
+        run: |
+          node src/index.js &
+          sleep 3
+      - name: Install & Build frontend
+        working-directory: frontend
+        run: |
+          npm install
+          npm run build
+      - name: Preview frontend
+        working-directory: frontend
+        run: |
+          npx vite preview --port 5173 &
+          sleep 2
+      - name: Run Cypress E2E against MySQL-backed backend
+        working-directory: frontend
+        run: |
+          npx cypress run || true
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-videos-${{ matrix.node-version }}
+          path: frontend/cypress/videos
+          retention-days: 30

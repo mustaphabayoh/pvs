@@ -1,0 +1,58 @@
+name: Build and Deploy
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ secrets.REGISTRY_HOST }}
+          username: ${{ secrets.REGISTRY_USER }}
+          password: ${{ secrets.REGISTRY_TOKEN }}
+
+      - name: Build and push backend image
+        working-directory: node-backend
+        run: |
+          docker build -t ${{ secrets.REGISTRY_HOST }}/pvs-node-backend:${{ github.ref_name }} .
+          docker push ${{ secrets.REGISTRY_HOST }}/pvs-node-backend:${{ github.ref_name }}
+
+      - name: Build and push frontend image
+        working-directory: frontend
+        run: |
+          docker build -t ${{ secrets.REGISTRY_HOST }}/pvs-frontend:${{ github.ref_name }} .
+          docker push ${{ secrets.REGISTRY_HOST }}/pvs-frontend:${{ github.ref_name }}
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          echo "$KUBE_CONFIG_DATA" | base64 --decode > kubeconfig
+          export KUBECONFIG=$(pwd)/kubeconfig
+
+      - name: Helm upgrade backend
+        run: |
+          helm upgrade --install pvs-backend ./k8s/helm/pvs-backend --set image.repository=${{ secrets.REGISTRY_HOST }}/pvs-node-backend --set image.tag=${{ github.ref_name }} --kubeconfig kubeconfig
+
+      - name: Helm upgrade frontend
+        run: |
+          helm upgrade --install pvs-frontend ./k8s/helm/pvs-frontend --set image.repository=${{ secrets.REGISTRY_HOST }}/pvs-frontend --set image.tag=${{ github.ref_name }} --kubeconfig kubeconfig

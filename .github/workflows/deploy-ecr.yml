@@ -1,0 +1,57 @@
+name: Build, Push to ECR & Deploy (on tag)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  build-push-deploy-ecr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: Build and push node-backend image
+        working-directory: node-backend
+        run: |
+          IMAGE=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/pvs-node-backend:${{ github.ref_name }}
+          docker build -t $IMAGE .
+          docker push $IMAGE
+
+      - name: Build and push frontend image
+        working-directory: frontend
+        run: |
+          IMAGE=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/pvs-frontend:${{ github.ref_name }}
+          docker build -t $IMAGE .
+          docker push $IMAGE
+
+      - name: Configure kubeconfig
+        env:
+          KUBE_CONFIG_DATA: ${{ secrets.KUBE_CONFIG_DATA }}
+        run: |
+          echo "$KUBE_CONFIG_DATA" | base64 --decode > kubeconfig
+          export KUBECONFIG=$(pwd)/kubeconfig
+
+      - name: Helm upgrade backend
+        run: |
+          helm upgrade --install pvs-backend ./k8s/helm/pvs-backend --set image.repository=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/pvs-node-backend --set image.tag=${{ github.ref_name }} --kubeconfig kubeconfig
+
+      - name: Helm upgrade frontend
+        run: |
+          helm upgrade --install pvs-frontend ./k8s/helm/pvs-frontend --set image.repository=${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/pvs-frontend --set image.tag=${{ github.ref_name }} --kubeconfig kubeconfig

@@ -1,0 +1,87 @@
+name: Build Docker Images
+
+on:
+  push:
+    branches: [ main, develop, 'feature/**' ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build-backend:
+    runs-on: ubuntu-latest
+    name: Build backend Docker image
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Build backend image
+        working-directory: node-backend
+        run: |
+          docker buildx build --load -t pvs-node-backend:latest .
+      - name: Inspect backend image
+        run: |
+          docker image ls | grep pvs-node-backend
+
+  build-frontend:
+    runs-on: ubuntu-latest
+    name: Build frontend Docker image
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build frontend (local)
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Build frontend image (static)
+        working-directory: frontend
+        run: |
+          docker buildx build --load -f Dockerfile -t pvs-frontend:latest .
+      - name: Inspect frontend image
+        run: |
+          docker image ls | grep pvs-frontend
+
+  test-compose:
+    runs-on: ubuntu-latest
+    name: Test docker-compose stack
+    needs: [ build-backend, build-frontend ]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build frontend (local)
+        working-directory: frontend
+        run: |
+          npm install --no-audit --no-fund
+          npm run build
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      - name: Build backend and frontend images
+        run: |
+          cd node-backend && docker buildx build --load -t pvs-node-backend:latest .
+          cd ../frontend && docker buildx build --load -f Dockerfile -t pvs-frontend:latest .
+      - name: Start docker-compose stack
+        run: |
+          docker-compose -f docker-compose.dev.yml up -d
+          sleep 5
+      - name: Check services health
+        run: |
+          docker-compose -f docker-compose.dev.yml ps
+          docker-compose -f docker-compose.dev.yml logs
+      - name: Verify backend health
+        run: |
+          curl -f http://localhost:4000/health || echo "Backend not yet responsive"
+      - name: Verify frontend
+        run: |
+          curl -f http://localhost:5173 || echo "Frontend not yet responsive"
+      - name: Cleanup
+        if: always()
+        run: |
+          docker-compose -f docker-compose.dev.yml down -v

@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: pvs
+data:
+  otel-collector-config.yaml: |-
+    receivers:
+      otlp:
+        protocols:
+          http:
+          grpc:
+    processors:
+      batch:
+    exporters:
+      logging:
+        logLevel: info
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [logging]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: pvs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector:0.74.0
+          command: ["/otelcol", "--config=/conf/otel-collector-config.yaml"]
+          volumeMounts:
+            - name: otel-config
+              mountPath: /conf
+          ports:
+            - containerPort: 4317
+            - containerPort: 4318
+      volumes:
+        - name: otel-config
+          configMap:
+            name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: pvs
+spec:
+  ports:
+    - name: otlp-grpc
+      port: 4317
+    - name: otlp-http
+      port: 4318
+  selector:
+    app: otel-collector
+  type: ClusterIP

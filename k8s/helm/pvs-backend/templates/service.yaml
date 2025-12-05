@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "pvs-backend.fullname" . }}
+  labels:
+    app: {{ include "pvs-backend.name" . }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: 4000
+  selector:
+    app: {{ include "pvs-backend.name" . }}
