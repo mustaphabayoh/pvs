@@ -10,16 +10,16 @@ test('Create booking buttons are disabled and show tooltip', async () => {
   // locate actual DOM button element (MUI may wrap content)
   const domBtn = btnCreateBooking.tagName === 'BUTTON' ? btnCreateBooking : btnCreateBooking.closest && btnCreateBooking.closest('button')
   expect(domBtn).toBeTruthy()
-  // Ensure the Create Booking dialog title is not present initially
-  expect(screen.queryByText('Create Booking')).toBeNull()
+  // Ensure the Create Booking form isn't present (no dialog form submit button)
+  expect(screen.queryByTestId('form-create-booking')).toBeNull()
 
-  // clicking the Create Booking button should NOT open the dialog
+  // clicking the Create Booking button should NOT open the dialog form
   fireEvent.click(btnCreateBooking)
-  expect(screen.queryByText('Create Booking')).toBeNull()
+  expect(screen.queryByTestId('form-create-booking')).toBeNull()
 
-  // also check the table Create button does not open the dialog
+  // also check the table Create button does not open the dialog form
   const btnCreate = await screen.findByRole('button', { name: /^create$/i })
   expect(btnCreate).toBeTruthy()
   fireEvent.click(btnCreate)
-  expect(screen.queryByText('Create Booking')).toBeNull()
+  expect(screen.queryByTestId('form-create-booking')).toBeNull()
 })

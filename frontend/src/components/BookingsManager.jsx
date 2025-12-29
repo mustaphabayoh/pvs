@@ -605,7 +605,7 @@ const paymentsNotBookedMapped = [];
 						setExtraDutyBookings([])
 									loadData()
 								} catch(e){ console.error(e); alert('Error creating booking: ' + e.message) }
-							}} data-testid="form-create-booking">Create Booking</Button>
+							}} data-testid="form-create-booking" disabled>Create Booking</Button>
 						</Box>
 					</Paper>
 				</Grid>
