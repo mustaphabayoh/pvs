@@ -1,5 +1,5 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import BookingsManager from '../BookingsManager.jsx'
 
 test('Create booking buttons are disabled and show tooltip', async () => {
@@ -7,9 +7,7 @@ test('Create booking buttons are disabled and show tooltip', async () => {
   // Wait a moment for initial render
   const btnCreateBooking = await screen.findByRole('button', { name: /create booking/i })
   expect(btnCreateBooking).toBeTruthy()
-  // locate actual DOM button element (MUI may wrap content)
-  const domBtn = btnCreateBooking.tagName === 'BUTTON' ? btnCreateBooking : btnCreateBooking.closest && btnCreateBooking.closest('button')
-  expect(domBtn).toBeTruthy()
+  expect(btnCreateBooking).toBeDisabled()
   // Ensure the Create Booking form isn't present (no dialog form submit button)
   expect(screen.queryByTestId('form-create-booking')).toBeNull()
 
@@ -20,6 +18,7 @@ test('Create booking buttons are disabled and show tooltip', async () => {
   // also check the table Create button does not open the dialog form
   const btnCreate = await screen.findByRole('button', { name: /^create$/i })
   expect(btnCreate).toBeTruthy()
+  expect(btnCreate).toBeDisabled()
   fireEvent.click(btnCreate)
   expect(screen.queryByTestId('form-create-booking')).toBeNull()
 })
