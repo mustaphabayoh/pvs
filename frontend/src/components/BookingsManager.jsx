@@ -9,10 +9,6 @@ import {
 	CardActions,
 	Button,
 	TextField,
-	Dialog,
-	DialogTitle,
-	DialogContent,
-	DialogActions,
 	Table,
 	TableBody,
 	TableCell,
@@ -22,24 +18,17 @@ import {
 	Chip,
 	Stack,
 	IconButton,
-	Avatar,
 	Tooltip,
-	TablePagination,
 	ToggleButton,
 	ToggleButtonGroup,
 	FormControl,
 	InputLabel,
 	Select,
-	MenuItem,
-	Checkbox,
-	FormControlLabel
+	MenuItem
 } from '@mui/material';
-import AddIcon from '@mui/icons-material/Add';
 import OpenInNewIcon from '@mui/icons-material/OpenInNew';
-import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import DoneAllIcon from '@mui/icons-material/DoneAll';
-import DeleteIcon from '@mui/icons-material/Delete';
 
 // Container types (shared with WishList)
 const containerTypes = [
@@ -58,6 +47,186 @@ const containerTypes = [
 ];
 
 import Api from '../lib/api';
+
+export default function BookingsManager({ token }) {
+	const [payments, setPayments] = useState([]);
+	const [bookings, setBookings] = useState([]);
+	const [importers, setImporters] = useState([]);
+	const [loading, setLoading] = useState(false);
+	const [paymentsView, setPaymentsView] = useState('cards');
+	const [activeTab, setActiveTab] = useState('pending');
+	const [query, setQuery] = useState('');
+	const [statusFilter, setStatusFilter] = useState('');
+	const [sortBy, setSortBy] = useState('newest');
+	const [selectedIds, setSelectedIds] = useState([]);
+	const [page, setPage] = useState(0);
+	const [rowsPerPage, setRowsPerPage] = useState(10);
+	const [previewOpen, setPreviewOpen] = useState(false);
+	const [previewItem, setPreviewItem] = useState(null);
+	
+	function normalizeEntry(e, kind = 'VERIFIED'){
+		return {
+			id: e.VerifiedID || e.PaymentID || `${kind}-${e.ReferenceNumber || Math.random()}`,
+			kind,
+			bank: e.BankName || e.bank_name,
+			amount: e.Amount || e.amount,
+			currency: e.CurrencyCode || e.currency_code || e.Currency || 'SLL',
+			reference: e.ReferenceNumber || e.reference_number,
+			importerName: e.Importer?.ImporterName || e.importer_name || e.importer || (e.ImporterName) || (e.ImporterID && `Importer ${e.ImporterID}`) || '',
+			status: e.Status || e.status,
+			date: e.PaymentDate || e.payment_date || e.CreatedAt || e.created_at || null,
+			raw: e
+		}
+	}
+
+	async function loadData(){
+		setLoading(true);
+		try{
+			const [verifs = [], approvedPayments = [], bookingsResp = [], importersResp = []] = await Promise.all([
+				Api.allVerifications ? Api.allVerifications(token).catch(()=>[]) : Promise.resolve([]),
+				Api.getPayments ? Api.getPayments(token, { status: 'APPROVED' }).catch(()=>[]) : Promise.resolve([]),
+				Api.getBookings ? Api.getBookings(token).catch(()=>[]) : Promise.resolve([]),
+				Api.importers ? Api.importers(token).catch(()=>[]) : Promise.resolve([])
+			]);
+
+			const paymentsList = Array.isArray(approvedPayments) ? approvedPayments : (approvedPayments && approvedPayments.payments) ? approvedPayments.payments : [];
+			setPayments(paymentsList.map(p => normalizeEntry(p, 'VERIFIED')));
+			setBookings((bookingsResp || []).map(b => ({ ...b })));
+			setImporters(importersResp || []);
+		}catch(e){
+			console.error('BookingsManager.loadData', e);
+		}finally{
+			setLoading(false);
+		}
+	}
+
+	useEffect(()=>{ loadData(); }, [token]);
+
+	const displayPayments = payments.filter(p => {
+		if(activeTab === 'pending') return p.status === 'VERIFIED' || p.status === 'APPROVED';
+		if(activeTab === 'bookings') return bookings.some(b => b.VerificationID === p.id || b.verification_id === p.id);
+		return true;
+	}).filter(p => {
+		if(query) return String(p.reference || p.bank || p.importerName || '').toLowerCase().includes(query.toLowerCase());
+		return true;
+	});
+
+	return (
+		<Box sx={{ p: 3 }}>
+			<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+				<Typography variant='h4' sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+					<DoneAllIcon sx={{ color: '#1976d2' }} />
+					Bookings Manager
+				</Typography>
+			</Box>
+
+			<Paper sx={{ width: '100%', mb: 3 }}>
+				<Box sx={{ px: 2 }}>
+					<Button size="small" sx={{ mr: 1 }} onClick={()=>loadData()}>Refresh</Button>
+					<ToggleButtonGroup size="small" value={activeTab} exclusive onChange={(_, v)=>v && setActiveTab(v)}>
+						<ToggleButton value="pending">Pending</ToggleButton>
+						<ToggleButton value="bookings">Bookings</ToggleButton>
+						<ToggleButton value="all">All</ToggleButton>
+					</ToggleButtonGroup>
+				</Box>
+			</Paper>
+
+			{/* Search & Filters */}
+			<Paper sx={{ p: 2, mb: 3 }}>
+				<Grid container spacing={2} alignItems="center">
+					<Grid item xs={12} md={4}>
+						<TextField fullWidth placeholder="Search by bank, reference, importer or booking id..." value={query} onChange={e=>setQuery(e.target.value)} InputProps={{ startAdornment: (<Box sx={{ mr: 1 }}><OpenInNewIcon/></Box>) }} />
+					</Grid>
+					<Grid item xs={12} md={3}>
+						<FormControl fullWidth>
+							<InputLabel>Filter By</InputLabel>
+							<Select value={statusFilter} label="Filter By" onChange={e=>setStatusFilter(e.target.value)}>
+								<MenuItem value="">All</MenuItem>
+								<MenuItem value="PENDING">Pending</MenuItem>
+								<MenuItem value="RELEASED">Released</MenuItem>
+								<MenuItem value="CANCELLED">Cancelled</MenuItem>
+							</Select>
+						</FormControl>
+					</Grid>
+					<Grid item xs={12} md={3}>
+						<FormControl fullWidth>
+							<InputLabel>Sort By</InputLabel>
+							<Select value={sortBy} label="Sort By" onChange={e=>setSortBy(e.target.value)}>
+								<MenuItem value="newest">Date (Newest)</MenuItem>
+								<MenuItem value="amount_desc">Amount (High-Low)</MenuItem>
+								<MenuItem value="amount_asc">Amount (Low-High)</MenuItem>
+							</Select>
+						</FormControl>
+					</Grid>
+					<Grid item xs={12} md={2}>
+						<Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+							<ToggleButtonGroup size="small" value={paymentsView} exclusive onChange={(_, v)=>v && setPaymentsView(v)}>
+								<ToggleButton value="cards">Cards</ToggleButton>
+								<ToggleButton value="list">List</ToggleButton>
+							</ToggleButtonGroup>
+						</Box>
+					</Grid>
+				</Grid>
+			</Paper>
+
+			{/* Main content - no create form here */}
+			<Grid container spacing={3}>
+				<Grid item xs={12} md={12}>
+					<Paper sx={{ p: 2 }}>
+						{paymentsView === 'cards' ? (
+							<Grid container spacing={2}>
+								{displayPayments.map(p => (
+									<Grid item xs={12} sm={6} md={4} key={p.id}>
+										<Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+											<CardContent sx={{ flexGrow: 1 }}>
+												<Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+													<Typography variant="h6" noWrap>{p.reference}</Typography>
+													<Chip label={p.status} color={p.status === 'APPROVED' ? 'success' : p.status === 'VERIFIED' ? 'info' : 'warning'} size="small" />
+												</Box>
+												<Typography variant="body1" sx={{ fontWeight: 'bold', mb: 1 }}>{p.currency} {p.amount}</Typography>
+												<Typography variant="body2" color="text.secondary">Bank: {p.bank}</Typography>
+												<Typography variant="body2" color="text.secondary">Importer: {p.importerName}</Typography>
+											</CardContent>
+											<CardActions>
+												<Button size="small" startIcon={<VisibilityIcon />} onClick={()=>{ setPreviewItem(p); setPreviewOpen(true) }}>Preview</Button>
+											</CardActions>
+										</Card>
+									</Grid>
+								))}
+							</Grid>
+						) : (
+							<TableContainer>
+								<Table size="small">
+									<TableHead>
+										<TableRow>
+											<TableCell>Importer</TableCell>
+											<TableCell>Bank</TableCell>
+											<TableCell>Reference</TableCell>
+											<TableCell>Amount</TableCell>
+											<TableCell>Status</TableCell>
+										</TableRow>
+									</TableHead>
+									<TableBody>
+										{displayPayments.map(p=> (
+											<TableRow key={p.id}>
+												<TableCell>{p.importerName}</TableCell>
+												<TableCell>{p.bank}</TableCell>
+												<TableCell>{p.reference}</TableCell>
+												<TableCell>{p.amount} {p.currency}</TableCell>
+												<TableCell><Chip label={p.status} size="small" color={p.status === 'APPROVED' ? 'success' : p.status === 'VERIFIED' ? 'info' : 'warning'} /></TableCell>
+											</TableRow>
+										))}
+									</TableBody>
+								</Table>
+							</TableContainer>
+						)}
+					</Paper>
+				</Grid>
+			</Grid>
+		</Box>
+	);
+}
+
 
 export default function BookingsManager({ token }) {
 	const [payments, setPayments] = useState([]); // normalized verified + approved payments
@@ -86,31 +255,9 @@ export default function BookingsManager({ token }) {
 	const [previewOpen, setPreviewOpen] = useState(false);
 	const [previewItem, setPreviewItem] = useState(null);
 
-	// Inline booking form state
-	const [formImporterId, setFormImporterId] = useState('');
-	const [formDocumentType, setFormDocumentType] = useState('STANDARD');
-	const [formContainers, setFormContainers] = useState(''); // CSV fallback
-	const [formContainersList, setFormContainersList] = useState([]); // individual containers
-	const [formContainerEntry, setFormContainerEntry] = useState('');
-	const [formBillOfLadingNumber, setFormBillOfLadingNumber] = useState('');
-	const [formNumberOfContainers, setFormNumberOfContainers] = useState('');
-	const [formVerificationId, setFormVerificationId] = useState('');
-	const [extraManualBookings, setExtraManualBookings] = useState([]);
-	const [extraDutyBookings, setExtraDutyBookings] = useState([]);
-
-// Dynamic container rows when NumberOfContainers is specified
-const [formContainerRows, setFormContainerRows] = useState([]); // { container_number, container_type }
-const [dialogContainerRows, setDialogContainerRows] = useState([]);
-
-// Parse NumberOfContainers like '3x20' -> 3, or '3' -> 3
-function parseNumberOfContainers(str){
-	if(!str) return 0;
-	const s = String(str).trim();
-	const match = s.match(/^(\d+)\s*(?:x.*)?$/i);
-	if(match) return Number(match[1]);
-	const n = parseInt(s, 10);
-	return isNaN(n) ? 0 : n;
-}
+	/* Booking form state removed */
+	/* Dialog and side-panel create form removed per request */
+	const [formContainerRows, setFormContainerRows] = useState([]); // kept for other logic if needed (empty by default)
 	function normalizeEntry(e, kind = 'VERIFIED'){
 		return {
 			id: e.VerifiedID || e.PaymentID || `${kind}-${e.ReferenceNumber || Math.random()}`,
@@ -268,33 +415,13 @@ const paymentsNotBookedMapped = [];
 		setSelectedIds(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
 	}
 
-	async function handleBulkCreate(){
-		if(selectedIds.length === 0) return;
-		const toCreate = displayPayments.filter(p=> selectedIds.includes(p.id));
-		const results = await Promise.allSettled(toCreate.map(p => Api.createBooking(token, { verification_id: p.id, document_type: 'STANDARD', containers: (p.raw && p.raw.DefaultContainers) || [] } )));
-		const succeeded = results.filter(r=>r.status === 'fulfilled').length;
-		const failed = results.length - succeeded;
-		alert(`Bulk create: ${succeeded} created, ${failed} failed`);
-		setSelectedIds([]);
-		loadData();
-	}
+	/* Bulk create removed from Bookings Manager UI */
 
-	async function handleOpenCreate(p){
-		setSelected(p);
-		setContainersCsv((p.raw && p.raw.DefaultContainers) ? p.raw.DefaultContainers.join(',') : '');
-		setDialogContainersList((p.raw && p.raw.DefaultContainers) ? p.raw.DefaultContainers : []);
-		setDialogBillOfLadingNumber('');
-		setDialogNumberOfContainers('');
-		setDialogContainerEntry('');			// initialize dialog rows based on default containers if present
-			if(p.raw && p.raw.DefaultContainers && p.raw.DefaultContainers.length){
-				setDialogContainerRows(p.raw.DefaultContainers.map(c => ({ container_number: c, container_type: '' }))); 
-			}
-		setOpenDialog(true);
-	}
+	/* handleOpenCreate removed - booking creation UI was removed */
 
-	async function handleCreate(){
-		if(!selected) return;
-		try{
+	/* booking creation removed */
+
+		
 // Build containers for dialog
 					let conts = [];
 					let dct = [];
@@ -417,8 +544,7 @@ const paymentsNotBookedMapped = [];
 											<CardActions>
 												<Tooltip title="Create bookings are only available from Manual Release or Duty Free pages">
 										<span>
-											<Button size="small" disabled>Create Booking</Button>
-										</span>
+													</span>
 									</Tooltip>
 												<Button size="small" startIcon={<VisibilityIcon />} onClick={()=>{ setPreviewItem(p); setPreviewOpen(true) }}>Preview</Button>
 											</CardActions>
@@ -436,8 +562,7 @@ const paymentsNotBookedMapped = [];
 											<TableCell>Reference</TableCell>
 											<TableCell>Amount</TableCell>
 											<TableCell>Status</TableCell>
-											<TableCell>Action</TableCell>
-										</TableRow>
+												</TableRow>
 									</TableHead>
 									<TableBody>
 										{displayPayments.map(p=> (
@@ -449,10 +574,8 @@ const paymentsNotBookedMapped = [];
 												<TableCell><Chip label={p.status} size="small" color={p.status === 'APPROVED' ? 'success' : p.status === 'VERIFIED' ? 'info' : 'warning'} /></TableCell>
 												<TableCell>
 									<Tooltip title="Create bookings are only available from Manual Release or Duty Free pages">
-										<span><Button size="small" disabled>Create</Button></span>
-									</Tooltip>
-								</TableCell>
-											</TableRow>
+												</Tooltip>
+													</TableRow>
 										))}
 									</TableBody>
 								</Table>
@@ -461,97 +584,7 @@ const paymentsNotBookedMapped = [];
 					</Paper>
 				</Grid>
 
-				{/* Booking form side panel */}
-				<Grid item xs={12} md={4}>
-					<Paper sx={{ p: 2 }}>
-						<Typography variant="h6">Create Booking</Typography>
-						<Typography variant="body2" color="text.secondary">Use a verified payment or verification to create a booking</Typography>
-						<Box sx={{ mt: 2 }}>
-							<FormControl fullWidth size="small" sx={{ mb: 2 }}>
-								<InputLabel>Importer</InputLabel>
-								<Select value={formImporterId} onChange={e=>setFormImporterId(e.target.value)} label="Importer">
-									<MenuItem value="">(Select importer)</MenuItem>
-									{importers.map(i => (
-										<MenuItem key={i.ImporterID} value={i.ImporterID}>{i.ImporterName}</MenuItem>
-									))}
-								</Select>
-							</FormControl>
-							<FormControl fullWidth size="small" sx={{ mb: 2 }}>
-								<InputLabel>Verification</InputLabel>
-								<Select value={formVerificationId} onChange={e=>setFormVerificationId(e.target.value)} label="Verification" inputProps={{ 'data-testid': 'form-verification-select' }}>
-									<MenuItem value="">(Select payment/verification)</MenuItem>
-									{payments.map(p => (
-										<MenuItem key={p.id} value={p.id}>{p.reference} • {p.importerName} • {p.amount} {p.currency}</MenuItem>
-									))}
-								</Select>
-							</FormControl>
-							<FormControl fullWidth size="small" sx={{ mb: 2 }}>
-								<Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Information</Typography>
-					<InputLabel>Document Type</InputLabel>
-								<Select value={formDocumentType} onChange={e=>setFormDocumentType(e.target.value)} label="Document Type">
-									<MenuItem value="STANDARD">STANDARD</MenuItem>
-									<MenuItem value="MANUAL_RELEASE">MANUAL RELEASE</MenuItem>
-									<MenuItem value="DUTY_FREE">DUTY FREE</MenuItem>
-								</Select>
-							</FormControl>
-							<TextField fullWidth size="small" label="Bill of Lading Number (BL)" value={formBillOfLadingNumber} onChange={e=>setFormBillOfLadingNumber(e.target.value)} sx={{ mb: 2 }} />
-				<TextField fullWidth size="small" label="Number of Containers (e.g., 3x20)" value={formNumberOfContainers} onChange={e=>setFormNumberOfContainers(e.target.value)} sx={{ mb: 2 }} inputProps={{ 'data-testid': 'form-number-of-containers' }} />
-
-				{/* Containers Section */}
-				<Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Containers</Typography>
-				{parseNumberOfContainers(formNumberOfContainers) > 0 ? (
-					<Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
-						{formContainerRows.map((r, idx) => (
-							<Box key={idx} sx={{ display: 'flex', gap: 1 }}>
-							<TextField fullWidth size="small" label={`Container #${idx+1}`} value={r.container_number} onChange={e=>setFormContainerRows(prev=>prev.map((p,i)=>i===idx?{...p,container_number:e.target.value}:p))} inputProps={{ 'data-testid': `form-container-number-${idx}` }} />
-							<FormControl size="small" sx={{ minWidth: 160 }}>
-								<InputLabel>Type</InputLabel>
-								<Select value={r.container_type} label="Type" onChange={e=>setFormContainerRows(prev=>prev.map((p,i)=>i===idx?{...p,container_type:e.target.value}:p))} inputProps={{ 'data-testid': `form-container-type-${idx}` }}>
-										<MenuItem value="">(Select)</MenuItem>
-										{containerTypes.map((ct)=> <MenuItem key={ct} value={ct}>{ct}</MenuItem>)}
-									</Select>
-								</FormControl>
-							</Box>
-						))}
-					</Box>
-) : (
-                    <>
-                        <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
-                            <TextField fullWidth size="small" placeholder="Enter container number" value={formContainerEntry} onChange={e=>setFormContainerEntry(e.target.value)} />
-                            <Button size="small" variant="outlined" onClick={()=>{
-                                if(!formContainerEntry.trim()) return;
-                                setFormContainersList(prev=>[...prev, formContainerEntry.trim()]);
-                                setFormContainerEntry('');
-                            }}>Add</Button>
-                        </Box>
-
-                        {formContainersList.length > 0 && (
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-                                {formContainersList.map((c, i) => (
-                                    <Chip key={i} label={c} onDelete={() => setFormContainersList(prev => prev.filter((_, idx) => idx !== i))} deleteIcon={<DeleteIcon/>} />
-                                ))}
-                            </Box>
-                        )}
-
-                        {/* CSV fallback (used only when no individual containers were added) */}
-                        <TextField fullWidth size="small" label="Containers (CSV) - used if no individual containers added" value={formContainers} onChange={e=>setFormContainers(e.target.value)} sx={{ mb: 2 }} />
-					</>
-				)}
-
-				{/* Extra bookings section for MANUAL_RELEASE */}
-						{formDocumentType === 'MANUAL_RELEASE' && (
-							<Box sx={{ mt: 2, p: 1, border: '1px dashed', borderColor: 'divider', mb: 2 }}>
-								<Typography variant="subtitle2">Manual Release - Extra Bookings</Typography>
-								<Button size="small" startIcon={<AddIcon/>} onClick={()=>setExtraManualBookings(prev=>[...prev, { BillOfLadingNumber: '', NumberOfContainers: '' } ])}>Add extra booking</Button>
-								{extraManualBookings.map((eb, idx) => (
-									<Box key={idx} sx={{ display: 'flex', gap: 1, alignItems: 'center', mt: 1 }}>
-										<TextField size="small" label="BL Number" value={eb.BillOfLadingNumber} onChange={e => setExtraManualBookings(prev => prev.map((p, i) => i === idx ? { ...p, BillOfLadingNumber: e.target.value } : p ))} />
-										<TextField size="small" label="Number of Containers" value={eb.NumberOfContainers} onChange={e => setExtraManualBookings(prev => prev.map((p, i) => i === idx ? { ...p, NumberOfContainers: e.target.value } : p ))} />
-										<IconButton size="small" onClick={() => setExtraManualBookings(prev => prev.filter((_, i) => i !== idx))}><DeleteIcon/></IconButton>
-									</Box>
-								))}
-							</Box>
-						)}
+</Grid>{/* Create form removed START */
 
 						{/* Extra bookings section for DUTY_FREE */}
 						{formDocumentType === 'DUTY_FREE' && (
@@ -605,59 +638,9 @@ const paymentsNotBookedMapped = [];
 						setExtraDutyBookings([])
 									loadData()
 								} catch(e){ console.error(e); alert('Error creating booking: ' + e.message) }
-							}} data-testid="form-create-booking" disabled>Create Booking</Button>
-						</Box>
-					</Paper>
-				</Grid>
-			</Grid>
+						}} 
+					</Box>/* Create form removed END */}					</Paper>
 
-			{/* Dialog reuse for older flow */}
-			<Dialog open={openDialog} onClose={()=>setOpenDialog(false)} maxWidth="sm" fullWidth>
-				<DialogTitle>Create Booking</DialogTitle>
-				<DialogContent>
-					{selected && (
-						<Box sx={{ mt: 1 }}>
-							<Typography variant="subtitle2">Payment: {selected.reference}</Typography>
-							<Typography variant="body2" sx={{ color: 'text.secondary' }}>{selected.bank} • {selected.importerName}</Typography>
-							<Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Information</Typography>
-						<TextField fullWidth label="Bill of Lading Number (BL)" value={dialogBillOfLadingNumber} onChange={e=>setDialogBillOfLadingNumber(e.target.value)} sx={{ mt: 2 }} />
-						<TextField fullWidth label="Number of Containers (e.g., 3x20)" value={dialogNumberOfContainers} onChange={e=>setDialogNumberOfContainers(e.target.value)} sx={{ mt: 1 }} />
-						<Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Containers</Typography>
-
-						{/* Containers area (dialog) */}
-						{parseNumberOfContainers(dialogNumberOfContainers) > 0 ? (
-							<Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
-								{dialogContainerRows.map((r, idx) => (
-									<Box key={idx} sx={{ display: 'flex', gap: 1 }}>
-										<TextField fullWidth size="small" label={`Container #${idx+1}`} value={r.container_number} onChange={e=>setDialogContainerRows(prev=>prev.map((p,i)=>i===idx?{...p,container_number:e.target.value}:p))} />
-										<FormControl size="small" sx={{ minWidth: 160 }}>
-											<InputLabel>Type</InputLabel>
-											<Select value={r.container_type} label="Type" onChange={e=>setDialogContainerRows(prev=>prev.map((p,i)=>i===idx?{...p,container_type:e.target.value}:p))}>
-												<MenuItem value="">(Select)</MenuItem>
-												{containerTypes.map((ct)=> <MenuItem key={ct} value={ct}>{ct}</MenuItem>)}
-											</Select>
-										</FormControl>
-									</Box>
-								))}
-							</Box>
-						) : (
-							<Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-								<TextField fullWidth size="small" placeholder="Enter container number" value={dialogContainerEntry} onChange={e=>setDialogContainerEntry(e.target.value)} />
-								<Button size="small" variant="outlined" onClick={()=>{
-									if(!dialogContainerEntry.trim()) return;
-									setDialogContainersList(prev=>[...prev, dialogContainerEntry.trim()]);
-									setDialogContainerEntry('');
-								}}>Add</Button>
-							</Box>
-						)}
-						</Box>
-					)}
-				</DialogContent>
-				<DialogActions>
-					<Button onClick={()=>setOpenDialog(false)}>Cancel</Button>
-					<Button variant="contained" onClick={handleCreate}>Create</Button>
-				</DialogActions>
-			</Dialog>
 		</Box>
 	);
 }
