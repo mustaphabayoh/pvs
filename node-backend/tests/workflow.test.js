@@ -1,6 +1,12 @@
+process.env.LOGIN_RATE_LIMIT_MAX = '1000'
+process.env.SENSITIVE_RATE_LIMIT_MAX = '1000'
+
 const request = require('supertest')
 const app = require('../src/index')
 const { sequelize, User, Importer } = require('../src/models')
+const { hashPassword } = require('../src/services/password')
+
+const PASSWORD = 'Str0ng!Passphrase42'
 
 beforeAll(async () => {
   await sequelize.sync({ force: true })
@@ -11,13 +17,14 @@ afterAll(async () => {
 })
 
 test('end-to-end workflow: create users, importer, verification, verify, booking', async () => {
-  // admin, customs, importer
-  await request(app).post('/api/auth/register').send({ username: 'admin', password: 'pass', role: 'ADMIN' }).expect(201)
-  await request(app).post('/api/auth/register').send({ username: 'customs', password: 'pass', role: 'CUSTOMS_OFFICER' }).expect(201)
-  await request(app).post('/api/auth/register').send({ username: 'imp1', password: 'pass', role: 'IMPORTER' }).expect(201)
+  // privileged accounts are provisioned by an administrator, not by self-registration
+  const password_hash = await hashPassword(PASSWORD)
+  await User.create({ username: 'admin', password_hash, role: 'ADMIN' })
+  await User.create({ username: 'customs', password_hash, role: 'CUSTOMS_OFFICER' })
+  await request(app).post('/api/auth/register').send({ username: 'imp1', password: PASSWORD, role: 'IMPORTER' }).expect(201)
 
   // login importer
-  const loginRes = await request(app).post('/api/auth/login').send({ username: 'imp1', password: 'pass' }).expect(200)
+  const loginRes = await request(app).post('/api/auth/login').send({ username: 'imp1', password: PASSWORD }).expect(200)
   const tokenImp = loginRes.body.access_token
 
   // create importer record
@@ -29,7 +36,7 @@ test('end-to-end workflow: create users, importer, verification, verify, booking
   await request(app).post('/api/verifications').set('Authorization', `Bearer ${tokenImp}`).send(vpayload).expect(201)
 
   // login customs
-  const loginC = await request(app).post('/api/auth/login').send({ username: 'customs', password: 'pass' }).expect(200)
+  const loginC = await request(app).post('/api/auth/login').send({ username: 'customs', password: PASSWORD }).expect(200)
   const tokenCustoms = loginC.body.access_token
 
   // list pending

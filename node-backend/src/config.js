@@ -16,7 +16,15 @@ module.exports = {
   },
   jwt: {
     secret: process.env.JWT_SECRET || 'replace-with-secure-secret',
-    expiresIn: process.env.JWT_EXPIRES_IN || '1h'
+    expiresIn: process.env.JWT_EXPIRES_IN || '1h',
+    issuer: process.env.JWT_ISSUER || 'pvs-api',
+    audience: process.env.JWT_AUDIENCE || 'pvs-client'
+  },
+  security: {
+    maxFailedLogins: parseInt(process.env.MAX_FAILED_LOGINS || '5', 10),
+    lockoutMinutes: parseInt(process.env.LOCKOUT_MINUTES || '15', 10),
+    corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173')
+      .split(',').map(s => s.trim()).filter(Boolean)
   }
 }
 
