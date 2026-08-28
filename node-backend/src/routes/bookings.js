@@ -2,8 +2,10 @@ const express = require('express')
 const router = express.Router()
 const { Booking, Verified, Container, Importer, Shipment, Payment, WishList } = require('../models')
 const auth = require('../middleware/auth')
+const { authorize } = require('../middleware/auth')
+const { PERMISSIONS, roleHasPermission } = require('../rbac')
 
-router.post('/', auth(['IMPORTER','QUAY_OPERATOR','ADMIN']), async (req, res) => {
+router.post('/', authorize(PERMISSIONS.BOOKING_CREATE), async (req, res) => {
   try{
     // Support both old and new booking creation formats
     const { 
@@ -233,7 +235,7 @@ router.get('/:id', auth(), async (req, res) => {
 })
 
 // update booking status (e.g. RELEASED, CANCELLED, COMPLETED)
-router.post('/:id/status', auth(['QUAY_OPERATOR','ADMIN']), async (req, res) => {
+router.post('/:id/status', authorize(PERMISSIONS.BOOKING_STATUS_UPDATE), async (req, res) => {
   try{
     const id = req.params.id
     const { status } = req.body
@@ -256,7 +258,7 @@ router.post('/:id/status', auth(['QUAY_OPERATOR','ADMIN']), async (req, res) => 
     }
 
     // role-specific checks: CANCELLED requires ADMIN
-    if(status === 'CANCELLED' && req.user.role !== 'ADMIN') return res.status(403).json({ message: 'insufficient privileges to cancel' })
+    if(status === 'CANCELLED' && !roleHasPermission(req.user.role, PERMISSIONS.BOOKING_CANCEL)) return res.status(403).json({ message: 'insufficient privileges to cancel' })
 
     b.Status = status
     

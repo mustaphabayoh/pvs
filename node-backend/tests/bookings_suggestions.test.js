@@ -1,9 +1,8 @@
-process.env.DEBUG_NO_AUTH = '1'
 const request = require('supertest')
-const jwt = require('jsonwebtoken')
-const cfg = require('../src/config')
 const app = require('../src/index')
-const { sequelize, Payment, Booking, Importer, WishList, Container } = require('../src/models')
+const { sequelize, Payment, Booking, Importer, WishList, Container, User } = require('../src/models')
+const { signAccessToken } = require('../src/services/tokens')
+const { hashPassword } = require('../src/services/password')
 
 let testImporter = null
 let authToken = null
@@ -12,8 +11,8 @@ beforeAll(async () => {
   // Ensure DB is ready (migrations should have been applied in CI/dev)
   await sequelize.sync({ force: true })
   testImporter = await Importer.create({ ImporterName: 'Test Importer', customs_registration_number: 'TEST-CRN-1' })
-  // create a token for this importer user to bypass auth
-  authToken = jwt.sign({ sub: 'importer-test', role: 'IMPORTER', id: testImporter.ImporterID }, cfg.jwt.secret)
+  const user = await User.create({ username: 'importer-test', role: 'IMPORTER', password_hash: await hashPassword('Str0ng!Passphrase42') })
+  authToken = signAccessToken(user)
 })
 
 afterAll(async () => {

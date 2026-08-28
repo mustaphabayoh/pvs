@@ -31,6 +31,17 @@ Quick structure
  
  Security
  - Do not commit production secrets. Use environment variables for `JWT_SECRET` and DB credentials. The backend performs basic validation and fails fast if required production env vars are missing.
+
+ Authentication and access control
+ - Two-factor authentication (TOTP) is mandatory for `ADMIN`: an admin login returns an enrollment challenge until an authenticator is registered, after which a 6-digit code is required. Enrollment returns single-use recovery codes.
+ - There is no self-service password reset. Administrators reset passwords via `POST /api/admin/users/:id/reset-password`, which returns a one-time temporary password, revokes existing sessions and forces a password change at next sign-in.
+ - Self-registration can only create `IMPORTER` accounts; privileged accounts are created by an administrator via `POST /api/admin/users`.
+ - Passwords require 12+ characters with upper case, lower case, digit and symbol, and may not contain the username.
+ - Repeated failed logins lock an account temporarily (`MAX_FAILED_LOGINS`, `LOCKOUT_MINUTES`); login and other sensitive endpoints are rate limited.
+ - System settings are a schema-validated key/value store: `GET`/`PUT /api/admin/settings` require the `settings:read` / `settings:manage` permissions (admin only). Keys and their types are defined in `node-backend/src/services/settings.js`; unknown or out-of-range values are rejected.
+ - Roles and permissions live in `node-backend/src/rbac.js`; routes authorize on permissions rather than hard-coded role lists. Password resets and role changes bump the user's token version, which immediately invalidates previously issued JWTs.
+
+ Additional security env vars: `JWT_ISSUER`, `JWT_AUDIENCE`, `BCRYPT_ROUNDS`, `MAX_FAILED_LOGINS`, `LOCKOUT_MINUTES`, `LOGIN_RATE_LIMIT_WINDOW_MS`, `LOGIN_RATE_LIMIT_MAX`, `SENSITIVE_RATE_LIMIT_WINDOW_MS`, `SENSITIVE_RATE_LIMIT_MAX`, `CORS_ORIGINS`, `TOTP_ISSUER`, `SEED_PASSWORD`.
  
  Changelog
  - See `CHANGELOG.md` for notable changes and release notes.

@@ -1,6 +1,7 @@
 const express = require('express')
 const bodyParser = require('body-parser')
 const cors = require('cors')
+const helmet = require('helmet')
 const cfg = require('./config')
 const sequelize = require('./db')
 const { User, Importer, Verified, Booking, Container, Shipment, Vessel } = require('./models')
@@ -14,9 +15,17 @@ const adminRoutes = require('./routes/admin')
 const app = express()
 const { httpLogger, initSentry, Sentry } = require('./logger')
 const { prometheus, initOpentelemetry } = require('./telemetry')
+app.set('trust proxy', 1)
+app.disable('x-powered-by')
 app.use(httpLogger)
-app.use(cors())
-app.use(bodyParser.json())
+app.use(helmet())
+app.use(cors({
+  origin: cfg.security.corsOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 600
+}))
+app.use(bodyParser.json({ limit: '100kb' }))
 
 app.use('/api/auth', authRoutes)
 app.use('/api/importers', importersRoutes)
@@ -43,22 +52,29 @@ async function start(){
     // ensure tables exist (sync) - fine for dev
     await sequelize.sync({ alter: true })
 
-    // In development/test mode create a couple of demo users so the UI can authenticate
+    // In development create the accounts the UI needs, each with a generated
+    // one-time password that must be changed on first login.
     if (process.env.NODE_ENV !== 'production') {
       try {
-        const bcrypt = require('bcryptjs')
-        const toCreate = [
-          { username: 'admin', password: 'password', role: 'ADMIN' },
-          { username: 'importer1', password: 'password', role: 'IMPORTER' },
-          { username: 'customs1', password: 'password', role: 'CUSTOMS_OFFICER' }
+        const { hashPassword, generateTemporaryPassword } = require('./services/password')
+        const seeds = [
+          { username: 'admin', role: 'ADMIN' },
+          { username: 'importer1', role: 'IMPORTER' },
+          { username: 'customs1', role: 'CUSTOMS_OFFICER' }
         ]
 
-        for (let u of toCreate) {
-          const found = await User.findOne({ where: { username: u.username } })
+        for (const seed of seeds) {
+          const found = await User.findOne({ where: { username: seed.username } })
           if (!found) {
-            const hash = await bcrypt.hash(u.password, 10)
-            await User.create({ username: u.username, password_hash: hash, role: u.role })
-            console.log('seeded user', u.username)
+            const password = process.env.SEED_PASSWORD || generateTemporaryPassword()
+            await User.create({
+              username: seed.username,
+              password_hash: await hashPassword(password),
+              role: seed.role,
+              must_change_password: true,
+              password_changed_at: new Date()
+            })
+            console.log(`seeded user ${seed.username} with temporary password: ${password}`)
           }
         }
       } catch (e) {

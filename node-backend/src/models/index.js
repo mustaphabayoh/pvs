@@ -6,8 +6,21 @@ const User = sequelize.define('User', {
   username: { type: Sequelize.STRING, unique: true, allowNull: false },
   password_hash: { type: Sequelize.STRING, allowNull: false },
   role: { type: Sequelize.STRING, allowNull: false },
-  created_at: { type: Sequelize.DATE, defaultValue: Sequelize.NOW }
-}, { tableName: 'user' })
+  token_version: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
+  must_change_password: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: false },
+  password_changed_at: { type: Sequelize.DATE },
+  failed_login_attempts: { type: Sequelize.INTEGER, allowNull: false, defaultValue: 0 },
+  locked_until: { type: Sequelize.DATE },
+  last_login_at: { type: Sequelize.DATE },
+  totp_secret: { type: Sequelize.STRING },
+  totp_enabled: { type: Sequelize.BOOLEAN, allowNull: false, defaultValue: false },
+  totp_confirmed_at: { type: Sequelize.DATE },
+  recovery_codes: { type: Sequelize.TEXT }
+}, {
+  tableName: 'user',
+  defaultScope: { attributes: { exclude: ['password_hash', 'totp_secret', 'recovery_codes'] } },
+  scopes: { withSecrets: { attributes: {} } }
+})
 
 const Importer = sequelize.define('Importer', {
   id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },
@@ -59,6 +72,13 @@ const Container = sequelize.define('Container', {
   created_at: { type: Sequelize.DATE, defaultValue: Sequelize.NOW }
 }, { tableName: 'container' })
 
+const Setting = sequelize.define('Setting', {
+  key: { type: Sequelize.STRING, primaryKey: true },
+  value: { type: Sequelize.TEXT },
+  updated_by: { type: Sequelize.STRING },
+  updated_at: { type: Sequelize.DATE, defaultValue: Sequelize.NOW }
+}, { tableName: 'setting', timestamps: false })
+
 // relationships
 Importer.hasMany(Booking, { foreignKey: 'importer_id' })
 Booking.belongsTo(Importer, { foreignKey: 'importer_id' })
@@ -82,7 +102,8 @@ module.exports = {
   Shipment,
   Verified,
   Booking,
-  Container
+  Container,
+  Setting
 }
 
 

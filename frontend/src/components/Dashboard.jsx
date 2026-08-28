@@ -26,7 +26,7 @@ export default function Dashboard({ token, onLogout }){
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="h6">PVS Dashboard</Typography>
         <div>
-          <Button onClick={() => nav('/admin')}>Admin Console</Button>
+          <Button onClick={() => nav('/system-setup')}>System Setup</Button>
           <Button onClick={() => nav('/customs')}>Customs</Button>
           <Button onClick={() => nav('/importer')}>Importer</Button>
           <Button onClick={() => nav('/quay')}>Quay</Button>

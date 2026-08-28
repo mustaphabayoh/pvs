@@ -2,9 +2,11 @@ const express = require('express')
 const router = express.Router()
 const { Importer } = require('../models')
 const auth = require('../middleware/auth')
+const { authorize } = require('../middleware/auth')
+const { PERMISSIONS } = require('../rbac')
 
 // Create importer (Admin / Customs / Importer)
-router.post('/', auth(['ADMIN','CUSTOMS_OFFICER','IMPORTER']), async (req, res) => {
+router.post('/', authorize(PERMISSIONS.IMPORTER_CREATE), async (req, res) => {
   try{
     const { name, customs_registration_number, contact_email } = req.body
     if(!name || !customs_registration_number) return res.status(400).json({ message: 'Missing fields' })
@@ -27,7 +29,7 @@ router.get('/:id', auth(), async (req, res) => {
 })
 
 // Update importer (Admin or Importer)
-router.put('/:id', auth(['ADMIN','IMPORTER']), async (req, res) => {
+router.put('/:id', authorize(PERMISSIONS.IMPORTER_UPDATE), async (req, res) => {
   try{
     const id = req.params.id
     const imp = await Importer.findByPk(id)
@@ -42,7 +44,7 @@ router.put('/:id', auth(['ADMIN','IMPORTER']), async (req, res) => {
 })
 
 // Delete importer (Admin only)
-router.delete('/:id', auth(['ADMIN']), async (req, res) => {
+router.delete('/:id', authorize(PERMISSIONS.IMPORTER_DELETE), async (req, res) => {
   try{
     const id = req.params.id
     const imp = await Importer.findByPk(id)

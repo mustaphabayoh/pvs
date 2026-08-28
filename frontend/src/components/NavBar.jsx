@@ -8,7 +8,7 @@ export default function NavBar({ role, onLogout }){
     <AppBar position="static" sx={{ mb: 2 }}>
       <Toolbar>
         <Typography variant="h6" sx={{ flexGrow: 1 }}>PVS — {role || 'Guest'}</Typography>
-        {role === 'ADMIN' && <Button color="inherit" onClick={() => nav('/admin')}>Admin</Button>}
+        {role === 'ADMIN' && <Button color="inherit" onClick={() => nav('/system-setup')}>System Setup</Button>}
         {(role === 'IMPORTER' || role === 'ADMIN') && <Button color="inherit" onClick={() => nav('/importers')}>Importers</Button>}
         {role === 'IMPORTER' && <Button color="inherit" onClick={() => nav('/importer')}>Workspace</Button>}
         {role === 'CUSTOMS_OFFICER' && <Button color="inherit" onClick={() => nav('/customs')}>Customs</Button>}
