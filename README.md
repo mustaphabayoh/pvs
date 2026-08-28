@@ -38,6 +38,7 @@ Quick structure
  - Self-registration can only create `IMPORTER` accounts; privileged accounts are created by an administrator via `POST /api/admin/users`.
  - Passwords require 12+ characters with upper case, lower case, digit and symbol, and may not contain the username.
  - Repeated failed logins lock an account temporarily (`MAX_FAILED_LOGINS`, `LOCKOUT_MINUTES`); login and other sensitive endpoints are rate limited.
+ - System settings are a schema-validated key/value store: `GET`/`PUT /api/admin/settings` require the `settings:read` / `settings:manage` permissions (admin only). Keys and their types are defined in `node-backend/src/services/settings.js`; unknown or out-of-range values are rejected.
  - Roles and permissions live in `node-backend/src/rbac.js`; routes authorize on permissions rather than hard-coded role lists. Password resets and role changes bump the user's token version, which immediately invalidates previously issued JWTs.
 
  Additional security env vars: `JWT_ISSUER`, `JWT_AUDIENCE`, `BCRYPT_ROUNDS`, `MAX_FAILED_LOGINS`, `LOCKOUT_MINUTES`, `LOGIN_RATE_LIMIT_WINDOW_MS`, `LOGIN_RATE_LIMIT_MAX`, `SENSITIVE_RATE_LIMIT_WINDOW_MS`, `SENSITIVE_RATE_LIMIT_MAX`, `CORS_ORIGINS`, `TOTP_ISSUER`, `SEED_PASSWORD`.
