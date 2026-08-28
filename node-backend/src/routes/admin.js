@@ -6,6 +6,7 @@ const { logger } = require('../logger')
 const { ROLES, PERMISSIONS, isRole, requiresMfa } = require('../rbac')
 const { authorize } = require('../middleware/auth')
 const { hashPassword, validatePassword, generateTemporaryPassword } = require('../services/password')
+const { DEFINITIONS, getSettings, updateSettings } = require('../services/settings')
 const { sensitiveLimiter } = require('../middleware/rateLimit')
 
 function validate(req, res){
@@ -36,6 +37,29 @@ function publicUser(u){
 async function countAdmins(){
   return User.count({ where: { role: ROLES.ADMIN } })
 }
+
+router.get('/settings', authorize(PERMISSIONS.SETTINGS_READ), async (req, res, next) => {
+  try{
+    return res.json({ settings: await getSettings(), definitions: DEFINITIONS })
+  }catch(err){ next(err) }
+})
+
+// Accepts either { settings: { key: value } } or a bare { key: value } body.
+router.put('/settings', authorize(PERMISSIONS.SETTINGS_MANAGE), async (req, res, next) => {
+  try{
+    const body = req.body || {}
+    const patch = body.settings && typeof body.settings === 'object' ? body.settings : body
+    if(typeof patch !== 'object' || Array.isArray(patch)){
+      return res.status(400).json({ message: 'Invalid request' })
+    }
+
+    const { values, errors } = await updateSettings(patch, { updatedBy: req.user.username })
+    if(errors) return res.status(400).json({ message: 'Invalid settings', errors })
+
+    audit('settings.updated', req, { keys: Object.keys(patch) })
+    return res.json({ settings: values, definitions: DEFINITIONS })
+  }catch(err){ next(err) }
+})
 
 router.get('/users', authorize(PERMISSIONS.USER_MANAGE), async (req, res, next) => {
   try{

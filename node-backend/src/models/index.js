@@ -72,6 +72,13 @@ const Container = sequelize.define('Container', {
   created_at: { type: Sequelize.DATE, defaultValue: Sequelize.NOW }
 }, { tableName: 'container' })
 
+const Setting = sequelize.define('Setting', {
+  key: { type: Sequelize.STRING, primaryKey: true },
+  value: { type: Sequelize.TEXT },
+  updated_by: { type: Sequelize.STRING },
+  updated_at: { type: Sequelize.DATE, defaultValue: Sequelize.NOW }
+}, { tableName: 'setting', timestamps: false })
+
 // relationships
 Importer.hasMany(Booking, { foreignKey: 'importer_id' })
 Booking.belongsTo(Importer, { foreignKey: 'importer_id' })
@@ -95,7 +102,8 @@ module.exports = {
   Shipment,
   Verified,
   Booking,
-  Container
+  Container,
+  Setting
 }
 
 

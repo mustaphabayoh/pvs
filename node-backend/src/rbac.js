@@ -11,6 +11,8 @@ const ROLES = {
 const PERMISSIONS = {
   USER_MANAGE: 'user:manage',
   USER_RESET_PASSWORD: 'user:reset-password',
+  SETTINGS_READ: 'settings:read',
+  SETTINGS_MANAGE: 'settings:manage',
   IMPORTER_CREATE: 'importer:create',
   IMPORTER_READ: 'importer:read',
   IMPORTER_UPDATE: 'importer:update',

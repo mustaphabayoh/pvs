@@ -41,6 +41,8 @@ export default {
   adminResetPassword: (token, id, password) => req(`/api/admin/users/${id}/reset-password`, { method: 'POST', token, body: password ? { password } : {} }),
   adminResetTwoFactor: (token, id) => req(`/api/admin/users/${id}/2fa/reset`, { method: 'POST', token }),
   adminUnlockUser: (token, id) => req(`/api/admin/users/${id}/unlock`, { method: 'POST', token }),
+  adminSettings: (token) => req('/api/admin/settings', { token }),
+  adminUpdateSettings: (token, settings) => req('/api/admin/settings', { method: 'PUT', token, body: { settings } }),
 
   // domain
   health: () => req('/health'),
