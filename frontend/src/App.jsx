@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Login from './components/Login'
 import Register from './components/Register'
 import Dashboard from './components/Dashboard'
-import AdminPage from './components/role-pages/AdminPage'
+import SystemSetupPage from './components/role-pages/SystemSetupPage'
 import ImporterPage from './components/role-pages/ImporterPage'
 import CustomsPage from './components/role-pages/CustomsPage'
 import QuayPage from './components/role-pages/QuayPage'
@@ -66,7 +66,8 @@ export default function App(){
           <Route path='/register' element={<Register onRegistered={logout} onBack={logout} />} />
           <Route path='/change-password' element={guard(<ChangePassword token={token} onChanged={signIn} />)} />
           <Route path='/dashboard' element={guard(<Dashboard token={token} onLogout={logout} />)} />
-          <Route path='/admin' element={guard(<AdminPage token={token} />, ['ADMIN'])} />
+          <Route path='/system-setup' element={guard(<SystemSetupPage token={token} />, ['ADMIN'])} />
+          <Route path='/admin' element={<Navigate to='/system-setup' replace />} />
           <Route path='/importer' element={guard(<ImporterPage token={token} />, ['IMPORTER', 'ADMIN'])} />
           <Route path='/importers' element={guard(<ImportersPage token={token} />, ['IMPORTER', 'ADMIN', 'CUSTOMS_OFFICER'])} />
           <Route path='/bookings' element={guard(<BookingsManager token={token} />, ['IMPORTER', 'ADMIN', 'QUAY_OPERATOR'])} />

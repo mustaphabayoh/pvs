@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Alert, Typography, TextField, Button, Select, MenuItem, Table, TableHead, TableRow, TableCell, TableBody, TablePagination, Paper, Stack } from '@mui/material'
-import Api from '../../lib/api'
-import SystemSettings from '../SystemSettings'
+import Api from '../lib/api'
 
 const ROLES = ['ADMIN', 'IMPORTER', 'CUSTOMS_OFFICER', 'QUAY_OPERATOR']
 
-export default function AdminPage({ token: tokenProp }){
-  const token = tokenProp || localStorage.getItem('pvs_token')
+export default function UserManagement({ token }){
   const [rows, setRows] = useState([])
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(10)
@@ -41,9 +39,6 @@ export default function AdminPage({ token: tokenProp }){
 
   return (
     <div>
-      <Typography variant="h5">Admin Console</Typography>
-      <Typography variant="body1" sx={{ mt: 1 }}>Manage users, credentials, two-factor enrollment and system settings.</Typography>
-
       {err && <Alert severity="error" sx={{ mt: 2 }}>{err}</Alert>}
       {notice && <Alert severity="success" sx={{ mt: 2 }}>{notice}</Alert>}
       {secret && (
@@ -116,8 +111,6 @@ export default function AdminPage({ token: tokenProp }){
 
         <TablePagination component='div' count={total} page={page} onPageChange={(e, p) => setPage(p)} rowsPerPage={rowsPerPage} onRowsPerPageChange={(e)=>{ setRowsPerPage(parseInt(e.target.value)); setPage(0) }} />
       </div>
-
-      <SystemSettings token={token} />
     </div>
   )
 }
